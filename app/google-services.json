@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "233733374434",
+    "project_id": "food-health-app-ea353",
+    "storage_bucket": "food-health-app-ea353.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233733374434:android:3f28de0bc26d616b64b9bb",
+        "android_client_info": {
+          "package_name": "com.foodhealth.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrNjrcWU0GIjhl_kcNATTLMMd2zhApUEg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
