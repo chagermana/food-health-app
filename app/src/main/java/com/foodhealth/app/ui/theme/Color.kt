@@ -20,3 +20,5 @@ val TextDark = Color(0xFF1D2A25)     // normal text
 val Muted = Color(0xFF6B7A73)        // grey-green for small and secondary text
 val Line = Color(0xFFE7E1D3)         // thin borders
 val White = Color(0xFFFFFFFF)
+val SoftGreen = Color(0xFFE3F0EA)    // tip icons and the "What this means" card
+val FoodGreenLight = Color(0xFF1B6B52) // nutrient bars

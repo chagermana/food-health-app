@@ -20,13 +20,17 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.foodhealth.app.ui.MainScreen
 import com.foodhealth.app.ui.theme.FoodHealthAppTheme
 import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
         setContent {
             FoodHealthAppTheme {
                 //the navigation controller remembers which screen we are on
@@ -34,11 +38,7 @@ class MainActivity : ComponentActivity() {
                 //if firebase already has a signed in user, skip login and openhome
                 val start = if (FirebaseAuth.getInstance().currentUser != null) "home" else "login"
 
-                enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-                    navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                )
-                //surface paints the themes background and sets a mathcing text color
+                //surface paints the themes background and sets a matching text color
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -70,25 +70,21 @@ class MainActivity : ComponentActivity() {
                                 onBackToLogin = { nav.popBackStack() }
                             )
                         }
-                    //home screen
+                    //home screen hosting bottom bar nav and screens flow
                         composable("home") {
-                            Column(
-                                Modifier.fillMaxSize().statusBarsPadding().padding(24.dp),
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text("Home Screen")
-                                Button(onClick = {
+                            MainScreen (
+                                onLogout = {
                                     FirebaseAuth.getInstance().signOut()
-                                    nav.navigate("login") { popUpTo("home") { inclusive = true } }
-                                }) { Text("Log out") }
-                            }
+                                    nav.navigate("login"){
+                                        popUpTo("home") { inclusive = true }
+                                    }
+                                }
+                            )
                         }
                     }
                 }
             }
         }
-        }
     }
-
-    fun popUptTo(string: String, function: () -> Unit) {}
+}
 
