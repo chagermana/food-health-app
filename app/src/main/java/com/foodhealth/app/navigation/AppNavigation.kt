@@ -14,14 +14,14 @@ import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.ui.graphics.vector.ImageVector
 
 // ---- App Navigation.kt - list of screens (routes) and the bottom tabs
-// Its the map of the application
+// It's the map of the application
 
 object Routes {
     const val HOME = "tab_home"
     const val ANALYSIS = "tab_analysis"
     const val RATE = "tab_route"
     const val PROFILE = "tab_profile"
-    // These two are not tabs just routes after picking/scanning a meal and a route for when sth goes wrong
+    // These two are not tabs just routes after picking/scanning a meal but a route for when sth goes wrong
     const val PORTION = "portion"
     const val ERROR = "error"
 
