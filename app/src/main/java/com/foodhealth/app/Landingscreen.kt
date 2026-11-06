@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,12 +33,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -45,8 +52,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.foodhealth.app.ui.theme.DeepGreen
 import com.foodhealth.app.ui.theme.FoodGreen
 import com.foodhealth.app.ui.theme.FoodOrange
@@ -57,11 +67,20 @@ import com.foodhealth.app.ui.theme.TextDark
 // ====================================================================
 // LandingScreen.kt : first page after the splash. Full-screen food photo,
 // floating AI labels, and a glossy "Get started" pill that leads to login.
-//
-// TO CHANGE THE PHOTO: add e.g. landing_bg.jpg to res/drawable and change
-// the line below to  R.drawable.landing_bg  (lowercase + underscores only).
 // ====================================================================
-private val LandingImage = R.drawable.meal_plate
+private val LandingImage = R.drawable.photo_ugali_fish_kachumbari
+
+// 0f = centre the photo, -1f = show its left edge (more fish), 1f = right edge (more ugali)
+private const val ImageBiasX = 0f
+
+// Where each label sits ON THE PHOTO, as a fraction of the picture:
+// fx = 0 (left) .. 1 (right),  fy = 0 (top) .. 1 (bottom)
+private data class FoodTag(val title: String, val subtitle: String, val fx: Float, val fy: Float)
+private val FoodTags = listOf(
+    FoodTag("Fish", "~120 kcal", 0.30f, 0.42f),
+    FoodTag("Ugali", "~330 kcal", 0.80f, 0.52f),
+    FoodTag("Kachumbari", "~32 kcal", 0.52f, 0.66f)
+)
 
 @Composable
 fun LandingScreen(onGetStarted: () -> Unit, onLogin: () -> Unit) {
@@ -73,11 +92,23 @@ fun LandingScreen(onGetStarted: () -> Unit, onLogin: () -> Unit) {
         label = "y"
     )
 
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val boxW = with(density) { maxWidth.toPx() }
+        val boxH = with(density) { maxHeight.toPx() }
+        val painter = painterResource(LandingImage)
+        val iw = painter.intrinsicSize.width.takeIf { it.isFinite() && it > 0f } ?: 640f
+        val ih = painter.intrinsicSize.height.takeIf { it.isFinite() && it > 0f } ?: 800f
+        // how the photo is cropped to fill the phone (so labels land on the food)
+        val scale = maxOf(boxW / iw, boxH / ih)
+        val offX = (boxW - iw * scale) * (ImageBiasX + 1f) / 2f
+        val offY = (boxH - ih * scale) / 2f
+
         Image(
-            painter = painterResource(LandingImage),
+            painter = painter,
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            alignment = BiasAlignment(ImageBiasX, 0f),
             modifier = Modifier.fillMaxSize()
         )
         // dark fade top and bottom so the words stay readable
@@ -135,13 +166,18 @@ fun LandingScreen(onGetStarted: () -> Unit, onLogin: () -> Unit) {
                 fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold, fontSize = 44.sp)
         }
 
-        // floating AI labels (positions are relative to the screen)
-        FloatingTag("Ugali", "~330 kcal",
-            Modifier.align(Alignment.CenterStart).offset(x = 24.dp, y = (40 + floatY).dp))
-        FloatingTag("Sukuma wiki", "Rich in iron",
-            Modifier.align(Alignment.CenterEnd).offset(x = (-24).dp, y = (-20 - floatY).dp))
-        FloatingTag("Beef stew", "28g protein",
-            Modifier.align(Alignment.Center).offset(x = 20.dp, y = (120 + floatY).dp))
+        // floating AI labels, placed on the food from FoodTags above
+        FoodTags.forEachIndexed { i, tag ->
+            val bob = (if (i % 2 == 0) floatY else -floatY) * density.density
+            FloatingTag(
+                title = tag.title,
+                subtitle = tag.subtitle,
+                cx = offX + tag.fx * iw * scale,
+                cy = offY + tag.fy * ih * scale + bob,
+                boxW = boxW,
+                marginPx = 16f * density.density
+            )
+        }
 
         // bottom: copy + glossy get-started pill
         Column(
@@ -183,11 +219,25 @@ fun LandingScreen(onGetStarted: () -> Unit, onLogin: () -> Unit) {
     }
 }
 
-// A small frosted label with a green dot, like the "Cabbage / Green Onion" tags.
+// A small frosted label centred on (cx, cy) in pixels, kept inside the screen.
 @Composable
-private fun FloatingTag(title: String, subtitle: String, modifier: Modifier = Modifier) {
+private fun FloatingTag(
+    title: String,
+    subtitle: String,
+    cx: Float,
+    cy: Float,
+    boxW: Float,
+    marginPx: Float
+) {
+    var size by remember { mutableStateOf(IntSize.Zero) }
     Row(
-        modifier
+        Modifier
+            .onSizeChanged { size = it }
+            .offset {
+                val x = (cx - size.width / 2f).coerceIn(marginPx, (boxW - size.width - marginPx).coerceAtLeast(marginPx))
+                val y = cy - size.height / 2f
+                IntOffset(x.roundToInt(), y.roundToInt())
+            }
             .clip(CircleShape)
             .background(Color(0xE6FFFFFF))
             .padding(horizontal = 12.dp, vertical = 8.dp),
