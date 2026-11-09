@@ -123,12 +123,13 @@ fun ProfileScreen(onLogout: () -> Unit, onPreviewError: () -> Unit) {
                     }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp))
-                {
-                    Icon(imageVector = Icons.Outlined.WbSunny, contentDescription = null, tint = TextDark, modifier = Modifier.size(16.dp) )
-                    Text("What's good", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.SansSerif, letterSpacing = 0.2.sp, color = TextDark)
-                }
+                Text(
+                    displayName,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = TextDark
+                )
                 Text(email, fontSize = 11.sp, color = Muted)   // TODO: add the age + goal from Firestore once we start to store user data
             }
             InfoMenuButton(
