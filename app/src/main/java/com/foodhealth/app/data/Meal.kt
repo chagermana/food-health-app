@@ -1,9 +1,19 @@
 package com.foodhealth.app.data
 
-import android.app.appsearch.StorageInfo
 import androidx.annotation.DrawableRes
 import com.foodhealth.app.R
 import kotlin.math.roundToInt
+
+// Placeholder until real food is added after the ML model is developed
+// Categories shown as the small menu chips on the Home screen.
+enum class MealCategory(val label: String){
+    CARBS("Carbs"),
+    PROTEINS("Proteins"),
+    VEGGIES("Veggies"),
+    FRUITS("Fruits"),
+    COMBOS("Common combos"),
+    DRINKS("Drinks")
+}
 
 // One meal the user may pick or scan.
 data class Meal(
@@ -14,16 +24,17 @@ data class Meal(
     val proteinG: Int,
     val carbsG: Int,
     val fatG: Int,
-    val fibreG: Int
+    val fibreG: Int,
+    val category: MealCategory = MealCategory.COMBOS
 )
 
 // 4 placeholder meals from the prototype.
 object SampleMeals{
     val all = listOf(
-        Meal("plate", "Ugali, skuma & stew", R.drawable.meal_plate, 680, 28, 82,24,10),
-        Meal("ugali", "Ugali", R.drawable.meal_ugali, 330, 7, 72, 1, 3),
-        Meal("chapati", "Chapati", R.drawable.meal_chapati, 300, 7, 46, 9, 3),
-        Meal("mandazi", "Mandazi", R.drawable.meal_mandazi, 270, 5, 36, 11, 1)
+        Meal("plate", "Ugali, skuma & stew", R.drawable.meal_plate, 680, 28, 82,24,10, MealCategory.COMBOS),
+        Meal("ugali", "Ugali", R.drawable.meal_ugali, 330, 7, 72, 1, 3, MealCategory.CARBS),
+        Meal("chapati", "Chapati", R.drawable.meal_chapati, 300, 7, 46, 9, 3, MealCategory.CARBS),
+        Meal("mandazi", "Mandazi", R.drawable.meal_mandazi, 270, 5, 36, 11, 1, MealCategory.CARBS)
     )
 
     // Find a meal from the id the ML model returns, or null if unknown

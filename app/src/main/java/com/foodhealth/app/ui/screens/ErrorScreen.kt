@@ -16,20 +16,45 @@ import com.foodhealth.app.ui.components.PrimaryButton
 import com.foodhealth.app.ui.theme.FoodGreen
 import com.foodhealth.app.ui.theme.Muted
 import com.foodhealth.app.ui.theme.TextDark
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import com.foodhealth.app.ui.theme.Cream
+import com.foodhealth.app.ui.theme.Peach
+import com.foodhealth.app.ui.theme.PeachDeep
 
 // =====================================================================
 // ErrorScreen.kt : "Whoops! Data hiccup" EXAMPLE LAYOUT
 // =====================================================================
 @Composable
 fun ErrorScreen(onRetry: () -> Unit, onGoHome: () -> Unit) {
+    Box(                                              // <-- NEW
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(PeachDeep, Peach, Cream, Cream)))
+    ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(Icons.Outlined.Restaurant, contentDescription = null, tint = FoodGreen,
-            modifier = Modifier.size(72.dp))
-        Spacer(Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .shadow(12.dp, CircleShape, ambientColor = Color(0x22000000), spotColor = Color(0x33000000))
+                .clip(CircleShape)
+                .background(Color.White),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Outlined.Restaurant, contentDescription = null,
+                tint = FoodGreen, modifier = Modifier.size(56.dp)
+            )
+        }
+        Spacer(Modifier.height(24.dp))
         Text("Whoops! Data hiccup",
             fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold,
             fontSize = 24.sp, color = TextDark, textAlign = TextAlign.Center)
@@ -42,3 +67,5 @@ fun ErrorScreen(onRetry: () -> Unit, onGoHome: () -> Unit) {
         TextButton(onClick = onGoHome) { Text("Go back home", color = FoodGreen) }
     }
 }
+}
+
