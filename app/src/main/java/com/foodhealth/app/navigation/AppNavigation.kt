@@ -21,8 +21,7 @@ object Routes {
     const val ANALYSIS = "tab_analysis"
     const val RATE = "tab_route"
     const val PROFILE = "tab_profile"
-    // These two are not tabs just routes after picking/scanning a meal but a route for when sth goes wrong
-    const val PORTION = "portion"
+    const val SCAN_RESULT = "scan_result"  // photo percentages + edit foods (replaced the old PORTION route)
     const val ERROR = "error"
 
 }

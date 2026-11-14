@@ -35,10 +35,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foodhealth.app.ui.MealFlowState
 import com.foodhealth.app.ui.components.EmptyState
-import com.foodhealth.app.ui.components.MealPhotoCard
+import com.foodhealth.app.ui.components.FlowPhotoCard
 import com.foodhealth.app.ui.components.PrimaryButton
 import com.foodhealth.app.ui.components.ScreenTopBar
 import com.foodhealth.app.ui.components.SectionCard
+import com.foodhealth.app.ui.components.SmallLabel
 import com.foodhealth.app.ui.theme.Cream
 import com.foodhealth.app.ui.theme.FoodGreen
 import com.foodhealth.app.ui.theme.FoodOrange
@@ -47,7 +48,8 @@ import com.foodhealth.app.ui.theme.Peach
 import com.foodhealth.app.ui.theme.SoftGreen
 import com.foodhealth.app.ui.theme.TextDark
 
-// RateScreen.kt : "How was it?" = star rating + three tips + save button.
+// RateScreen.kt : "How was it?" = system balanced-diet score (placeholder)
+// + the user's star rating + three tips + save button.
 @Composable
 fun RateScreen(
     flow: MealFlowState,
@@ -55,11 +57,11 @@ fun RateScreen(
     onSave: () -> Unit,
     onGoHome: () -> Unit
 ) {
-    val meal = flow.meal
-    if (meal == null) {
+    if (!flow.readyForAnalysis) {
         EmptyState(
             Icons.Outlined.StarBorder, "Nothing to rate yet",
-            "Pick or scan a meal first, then come back to rate it.", "Choose a meal", onGoHome
+            "Scan or upload a meal and confirm the foods, then come back to rate it.",
+            "Choose a meal", onGoHome
         )
         return
     }
@@ -74,17 +76,32 @@ fun RateScreen(
         ScreenTopBar(
             title = "How was it?",
             onBack = onBack,
-            infoText = "Rate the meal from 1 to 5 stars. Your ratings help you see which meals you enjoy and which are good for you."
+            infoText = "See how balanced your meal was, and rate it from 1 to 5 stars."
         )
-        MealPhotoCard(
-            title = meal.name,
-            imageRes = meal.imageRes,
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            height = 150.dp,
-            labelSize = 13.sp
-        )
+        FlowPhotoCard(flow, Modifier.fillMaxWidth().padding(top = 4.dp), height = 150.dp)
 
+        // TODO(teammate): show MealAnalysis.balanceScore here once the analysis exists.
         SectionCard(Modifier.padding(top = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Balanced-diet score",
+                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TextDark
+                    )
+                    SmallLabel(
+                        "Comes from your nutrient analysis (coming soon).",
+                        Modifier.padding(top = 4.dp)
+                    )
+                }
+                Text(
+                    "-- / 10",
+                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp, color = FoodOrange
+                )
+            }
+        }
+
+        SectionCard(Modifier.padding(top = 12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center

@@ -72,6 +72,7 @@ import com.foodhealth.app.ui.theme.ProteinColor
 import com.foodhealth.app.ui.theme.TextDark
 import com.foodhealth.app.ui.theme.WaterBlue
 import com.google.firebase.auth.FirebaseAuth
+import com.foodhealth.app.ui.components.MealDiarySection
 
 // =====================================================================
 // ProfileScreen.kt : "Morning Ahmed" style dashboard. All numbers are
@@ -185,6 +186,8 @@ fun ProfileScreen(onLogout: () -> Unit, onPreviewError: () -> Unit) {
                 MealTimeTile("Dinner", "—", Modifier.weight(1f))
             }
         }
+        // ----------- meal diary (real data from Firestore) -------------
+        MealDiarySection()
 
         // ---------- water (tap segments / +) and streak ----------
         Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

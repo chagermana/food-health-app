@@ -1,5 +1,10 @@
 package com.foodhealth.app.ui
 
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -23,10 +28,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,43 +41,69 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.foodhealth.app.data.MealRepository
 import com.foodhealth.app.data.SampleMeals
-import com.foodhealth.app.ml.FakeMealRecognizer
-import com.foodhealth.app.ml.MealRecognizer
+import com.foodhealth.app.data.ScanSource
+import com.foodhealth.app.ml.FoodClassifier
+import com.foodhealth.app.ml.ImageLoader
 import com.foodhealth.app.navigation.BottomTab
 import com.foodhealth.app.navigation.Routes
+import com.foodhealth.app.ui.components.ScanSourceDialog
 import com.foodhealth.app.ui.screens.AnalysisScreen
 import com.foodhealth.app.ui.screens.ErrorScreen
 import com.foodhealth.app.ui.screens.HomeScreen
-import com.foodhealth.app.ui.screens.PortionScreen
 import com.foodhealth.app.ui.screens.ProfileScreen
 import com.foodhealth.app.ui.screens.RateScreen
+import com.foodhealth.app.ui.screens.ScanResultScreen
 import com.foodhealth.app.ui.theme.FoodGreen
 import com.foodhealth.app.ui.theme.Muted
 import com.foodhealth.app.ui.theme.White
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import java.io.File
+
+private const val TAG = "MainScreen"
 
 // =====================================================================
 // MainScreen.kt : the layout AFTER logging in: the screens fill the whole
 // area and a translucent, floating, round-edged bar sits ON TOP of them.
+//
+// Scan flow: Home -> (camera | gallery) -> ML model -> Scan result ->
+//            Analysis -> Rate -> Profile (diary)
 // =====================================================================
 @Composable
 fun MainScreen(onLogout: () -> Unit) {
     val navController = rememberNavController()
+    val context = LocalContext.current
 
     val flow = remember { MealFlowState() }
-    // ===== ML PLUG POINT: replace this ONE line when the model is ready =====
-    val recognizer: MealRecognizer = remember { FakeMealRecognizer() }
-    // =======================================================================
+    val repository = remember { MealRepository() }
+
+    // ===== ML PLUG POINT: the real on-device food model =====
+    // If the model or labels.txt fail to load, classifier is null and the
+    // scan buttons show a friendly message instead of crashing the app.
+    val classifier = remember {
+        runCatching { FoodClassifier(context) }
+            .onFailure { Log.e(TAG, "Could not start the food classifier", it) }
+            .getOrNull()
+    }
+    DisposableEffect(classifier) { onDispose { classifier?.close() } }
+    // ========================================================
+
     var isScanning by remember { mutableStateOf(false) }
+    var showSourceDialog by remember { mutableStateOf(false) }
+    var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -83,6 +116,66 @@ fun MainScreen(onLogout: () -> Unit) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
+        }
+    }
+
+    // Shows a message without waiting for it to disappear.
+    fun toast(message: String) {
+        scope.launch { snackbarHostState.showSnackbar(message) }
+    }
+
+    // photo -> upright bitmap -> ML model -> Scan result screen
+    fun analyse(uri: Uri, source: ScanSource) {
+        scope.launch {
+            isScanning = true
+            try {
+                val engine = classifier
+                if (engine == null) {
+                    toast("The food scanner could not start. Please restart the app.")
+                    return@launch
+                }
+                val bitmap = ImageLoader.load(context, uri)
+                if (bitmap == null) {
+                    toast("We couldn't read that photo. Try another one.")
+                    return@launch
+                }
+                val predictions = engine.classify(bitmap)
+                flow.startScan(bitmap, source, predictions)
+                navController.navigate(Routes.SCAN_RESULT)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Scan failed", e)
+                navController.navigate(Routes.ERROR)
+            } finally {
+                isScanning = false
+            }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) analyse(uri, ScanSource.GALLERY)
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { saved ->
+        val uri = pendingCameraUri
+        if (saved && uri != null) analyse(uri, ScanSource.CAMERA)
+    }
+
+    fun launchCamera() {
+        try {
+            val dir = File(context.cacheDir, "photos").apply { mkdirs() }
+            val file = File(dir, "scan_${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            pendingCameraUri = uri
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not open the camera", e)
+            toast("No camera available on this device.")
         }
     }
 
@@ -103,39 +196,20 @@ fun MainScreen(onLogout: () -> Unit) {
                         meals = SampleMeals.all,
                         isScanning = isScanning,
                         onMealClick = { meal ->
-                            flow.startMeal(meal)
-                            navController.navigate(Routes.PORTION)
+                            flow.startManual(meal)
+                            navController.navigate(Routes.SCAN_RESULT)
                         },
-                        onScanClick = {
-                            scope.launch {
-                                isScanning = true
-                                try {
-                                    val recognition = recognizer.recognize(null)
-                                    val meal = recognition?.let { SampleMeals.byId(it.mealId) }
-                                    if (meal != null) {
-                                        flow.startMeal(meal)
-                                        navController.navigate(Routes.PORTION)
-                                    } else {
-                                        snackbarHostState.showSnackbar(
-                                            "We couldn't recognise that meal. Pick one below."
-                                        )
-                                    }
-                                } catch (e: Exception) {
-                                    navController.navigate(Routes.ERROR)
-                                } finally {
-                                    isScanning = false
-                                }
-                            }
-                        }
+                        onScanClick = { showSourceDialog = true }
                     )
                 }
 
-                composable(Routes.PORTION) {
-                    PortionScreen(
+                composable(Routes.SCAN_RESULT) {
+                    ScanResultScreen(
                         flow = flow,
+                        repository = repository,
                         onBack = { navController.popBackStack() },
                         onGoHome = { goToTab(Routes.HOME) },
-                        onAnalyse = { navController.navigate(Routes.ANALYSIS) }
+                        onProceed = { navController.navigate(Routes.ANALYSIS) }
                     )
                 }
 
@@ -154,9 +228,22 @@ fun MainScreen(onLogout: () -> Unit) {
                         onBack = { navController.popBackStack() },
                         onGoHome = { goToTab(Routes.HOME) },
                         onSave = {
-                            // WEEK 4: save flow.meal, flow.result and flow.rating to Firestore here.
-                            scope.launch { snackbarHostState.showSnackbar("Meal added to your diary") }
-                            goToTab(Routes.PROFILE)
+                            scope.launch {
+                                try {
+                                    if (flow.rating > 0) {
+                                        withTimeout(10_000) {
+                                            repository.saveRating(flow.mealId, flow.rating)
+                                        }
+                                    }
+                                    toast("Meal added to your diary")
+                                    goToTab(Routes.PROFILE)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Could not save rating", e)
+                                    toast("Couldn't save your rating. Please try again.")
+                                }
+                            }
                         }
                     )
                 }
@@ -186,11 +273,26 @@ fun MainScreen(onLogout: () -> Unit) {
             }
         }
     }
+
+    if (showSourceDialog) {
+        ScanSourceDialog(
+            onDismiss = { showSourceDialog = false },
+            onCamera = {
+                showSourceDialog = false
+                launchCamera()
+            },
+            onGallery = {
+                showSourceDialog = false
+                galleryLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            }
+        )
+    }
 }
 
 // The floating translucent pill. Active tab = green pill with icon + label,
-// other tabs = just the icon. Same icons as before (BottomTab).
-// NOTE: top-level function (it was nested inside MainScreen before).
+// other tabs = just the icon. (unchanged from before)
 @Composable
 private fun FloatingBottomBar(
     currentRoute: String?,
@@ -207,14 +309,12 @@ private fun FloatingBottomBar(
     ) {
         Row(
             modifier = Modifier
-                // soft shadow; keep it light so it doesn't show as a grey smudge through the glass
                 .shadow(
                     10.dp, barShape,
                     ambientColor = Color(0x14000000),
                     spotColor = Color(0x22000000)
                 )
                 .clip(barShape)
-                // translucent glass: more see-through = lower alpha
                 .background(
                     Brush.verticalGradient(
                         listOf(
@@ -223,7 +323,6 @@ private fun FloatingBottomBar(
                         )
                     )
                 )
-                // bright rim, fading downwards, gives the glossy edge
                 .border(
                     1.dp,
                     Brush.verticalGradient(

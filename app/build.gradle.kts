@@ -58,4 +58,5 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.litert)
 }
