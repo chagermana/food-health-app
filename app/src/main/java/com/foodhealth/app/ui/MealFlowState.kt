@@ -10,7 +10,8 @@ import com.foodhealth.app.data.Meal
 import com.foodhealth.app.data.ScanSource
 import com.foodhealth.app.ml.FoodPrediction
 import java.util.UUID
-
+import androidx.compose.runtime.mutableStateMapOf
+import com.foodhealth.app.data.MealAnalysis
 // =====================================================================
 // MealFlowState.kt : remembers the meal the user is working on while they
 // move through Home -> Scan result -> Analysis -> Rate.
@@ -32,13 +33,25 @@ class MealFlowState {
         private set
     var mealSaved by mutableStateOf(false)              // true once "Proceed" saved it
         private set
-    var rating by mutableIntStateOf(0)                  // 0 = not rated, 1..5 stars
+    var rating by mutableIntStateOf(0)
+
+    // 0 = not rated, 1..5 stars
+    var analysis by mutableStateOf<MealAnalysis?>(null)
+        private set
+
+    fun updateAnalysis(value: MealAnalysis) {
+        analysis = value
+    }
 
     private var suggested: List<FoodClass> = emptyList()   // what the model suggested
 
     val hasMeal: Boolean get() = selected.isNotEmpty()
     val readyForAnalysis: Boolean get() = hasMeal && mealSaved
     val wasEdited: Boolean get() = selected != suggested
+
+    // Stores the portion sizes entered for each confirmed food.
+    val portionInputs = mutableStateMapOf<String, String>()
+
 
     // Called after the ML model has looked at a photo.
     fun startScan(newPhoto: Bitmap, newSource: ScanSource, newPredictions: List<FoodPrediction>) {
@@ -69,6 +82,15 @@ class MealFlowState {
         mealId = UUID.randomUUID().toString()
         mealSaved = false
         rating = 0
+        analysis = null
+
+        // Clear portions from the previous meal.
+        portionInputs.clear()
+
+        // Initialise empty portion inputs for the new meal.
+        selected.forEach { food ->
+            portionInputs[food.label] = ""
+        }
     }
 
     // The model's confidence for one food (0f..1f); 0 if there was no scan.
@@ -85,13 +107,34 @@ class MealFlowState {
     fun changeFood(index: Int, food: FoodClass) {
         if (index !in selected.indices) return
         if (food in selected && selected[index] != food) return
-        selected = selected.toMutableList().also { it[index] = food }
+
+        val oldFood = selected[index]
+
+        selected = selected.toMutableList().also {
+            it[index] = food
+        }
+
+        // Remove the old food's portion.
+        portionInputs.remove(oldFood.label)
+
+        // Initialise the new food's portion.
+        portionInputs[food.label] = ""
+
         mealSaved = false
     }
 
     fun removeFood(index: Int) {
-        if (selected.size <= 1) return            // a plate keeps at least one food
-        selected = selected.filterIndexed { i, _ -> i != index }
+        if (selected.size <= 1) return
+
+        val removedFood = selected[index]
+
+        selected = selected.filterIndexed { i, _ ->
+            i != index
+        }
+
+        // Remove the deleted food's portion.
+        portionInputs.remove(removedFood.label)
+
         mealSaved = false
     }
 
@@ -101,6 +144,10 @@ class MealFlowState {
             .filter { it !in selected }
             .maxByOrNull { probabilityOf(it) } ?: return
         selected = selected + next
+
+        // Initialise a portion input for the added food.
+        portionInputs[next.label] = ""
+
         mealSaved = false
     }
 

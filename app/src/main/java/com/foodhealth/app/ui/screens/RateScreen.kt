@@ -89,14 +89,19 @@ fun RateScreen(
                         fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TextDark
                     )
                     SmallLabel(
-                        "Comes from your nutrient analysis (coming soon).",
+                        if (flow.analysis?.balanceScore != null)
+                            "Based on your meal's nutrient analysis."
+                        else
+                            "Nutrient analysis is not available.",
                         Modifier.padding(top = 4.dp)
                     )
                 }
                 Text(
-                    "-- / 10",
-                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp, color = FoodOrange
+                    "${flow.analysis?.balanceScore?.toString() ?: "--"} / 10",
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    color = FoodOrange
                 )
             }
         }
