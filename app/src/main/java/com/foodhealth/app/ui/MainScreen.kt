@@ -80,9 +80,11 @@ fun MainScreen(onLogout: () -> Unit) {
 
     fun goToTab(route: String) {
         navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            popUpTo(Routes.HOME) {
+                inclusive = false
+            }
             launchSingleTop = true
-            restoreState = true
+            restoreState = false
         }
     }
 
