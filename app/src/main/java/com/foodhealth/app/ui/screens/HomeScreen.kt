@@ -73,6 +73,11 @@ import com.foodhealth.app.ui.theme.Peach
 import com.foodhealth.app.ui.theme.PeachDeep
 import com.foodhealth.app.ui.theme.TextDark
 import com.google.firebase.auth.FirebaseAuth
+import androidx.compose.ui.platform.LocalContext
+import com.foodhealth.app.data.Drink
+import com.foodhealth.app.data.Drinks
+import com.foodhealth.app.ui.components.MealPhotoCard
+import com.foodhealth.app.util.drawableByName
 
 private val FullWidth: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
 
@@ -81,7 +86,8 @@ fun HomeScreen(
     meals: List<Meal>,
     isScanning: Boolean,
     onScanClick: () -> Unit,
-    onMealClick: (Meal) -> Unit
+    onMealClick: (Meal) -> Unit,
+    onDrinkClick: (Drink) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf<MealCategory?>(null) }   // null = "All"
@@ -153,6 +159,8 @@ fun HomeScreen(
                     }
                 }
             }
+
+            item(span = FullWidth) { DrinksRow(onDrinkClick) }
 
             item(span = FullWidth) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -279,5 +287,34 @@ private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) 
             label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
             color = if (selected) Color.White else TextDark, maxLines = 1
         )
+    }
+}
+
+// Drink cards: tap one to open the "Log a drink" page.
+@Composable
+private fun DrinksRow(onDrinkClick: (Drink) -> Unit) {
+    val context = LocalContext.current
+    Column {
+        Text(
+            "Had a drink?",
+            fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold,
+            fontSize = 18.sp, color = TextDark
+        )
+        Text(
+            "Tap one to log how many glasses you had.",
+            fontSize = 12.sp, color = Muted,
+            modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(Drinks.all, key = { it.id }) { drink ->
+                MealPhotoCard(
+                    title = drink.name,
+                    imageRes = drawableByName(context, drink.imageName, R.drawable.meal_plate),
+                    modifier = Modifier.width(120.dp),
+                    height = 110.dp,
+                    onClick = { onDrinkClick(drink) }
+                )
+            }
+        }
     }
 }

@@ -72,6 +72,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import java.io.File
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.foodhealth.app.ui.screens.DrinkScreen
 
 private const val TAG = "MainScreen"
 
@@ -201,7 +204,8 @@ fun MainScreen(onLogout: () -> Unit) {
                             flow.startManual(meal)
                             navController.navigate(Routes.SCAN_RESULT)
                         },
-                        onScanClick = { showSourceDialog = true }
+                        onScanClick = { showSourceDialog = true },
+                        onDrinkClick = { navController.navigate(Routes.drink(it.id)) }
                     )
                 }
 
@@ -253,7 +257,8 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable(Routes.PROFILE) {
                     ProfileScreen(
                         onLogout = onLogout,
-                        onPreviewError = { navController.navigate(Routes.ERROR) }
+                        onPreviewError = { navController.navigate(Routes.ERROR) },
+                        onLogDrink = { navController.navigate(Routes.drink(it))}
                     )
                 }
 
@@ -263,6 +268,20 @@ fun MainScreen(onLogout: () -> Unit) {
                         onGoHome = { goToTab(Routes.HOME) }
                     )
                 }
+                composable(
+                    Routes.DRINK,
+                    arguments = listOf(navArgument("drinkId") { type = NavType.StringType })
+                ) { entry ->
+                    DrinkScreen(
+                        initialDrinkId = entry.arguments?.getString("drinkId") ?: "water",
+                        onBack = { navController.popBackStack() },
+                        onSaved = {
+                            toast("Drink added to your diary")
+                            goToTab(Routes.PROFILE)
+                        }
+                    )
+                }
+
             }
 
             // drawn AFTER the NavHost, so it floats on top of the screen
