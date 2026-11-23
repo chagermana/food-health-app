@@ -1,5 +1,6 @@
 package com.foodhealth.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +26,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Search
@@ -47,22 +50,29 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foodhealth.app.LogoImage
 import com.foodhealth.app.R
 import com.foodhealth.app.authFieldColors
+import com.foodhealth.app.data.Drink
+import com.foodhealth.app.data.Drinks
+import com.foodhealth.app.data.FoodClass
 import com.foodhealth.app.data.Meal
 import com.foodhealth.app.data.MealCategory
 import com.foodhealth.app.ui.components.GlossyIconButton
 import com.foodhealth.app.ui.components.InfoMenuButton
 import com.foodhealth.app.ui.components.MealNutriCard
+import com.foodhealth.app.ui.components.MealPhotoCard
 import com.foodhealth.app.ui.theme.Cream
 import com.foodhealth.app.ui.theme.DeepGreen
 import com.foodhealth.app.ui.theme.FoodGreen
@@ -72,12 +82,8 @@ import com.foodhealth.app.ui.theme.Muted
 import com.foodhealth.app.ui.theme.Peach
 import com.foodhealth.app.ui.theme.PeachDeep
 import com.foodhealth.app.ui.theme.TextDark
-import com.google.firebase.auth.FirebaseAuth
-import androidx.compose.ui.platform.LocalContext
-import com.foodhealth.app.data.Drink
-import com.foodhealth.app.data.Drinks
-import com.foodhealth.app.ui.components.MealPhotoCard
 import com.foodhealth.app.util.drawableByName
+import com.google.firebase.auth.FirebaseAuth
 
 private val FullWidth: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
 
@@ -87,16 +93,48 @@ fun HomeScreen(
     isScanning: Boolean,
     onScanClick: () -> Unit,
     onMealClick: (Meal) -> Unit,
-    onDrinkClick: (Drink) -> Unit
+    onDrinkClick: (Drink) -> Unit,
+    onSeeAll: () -> Unit,
+    onBackAtRoot: () -> Unit
 ) {
+    val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf<MealCategory?>(null) }   // null = "All"
+
+    // Searching = the box has text. Then we show ALL 13 foods and the drinks that match.
+    val searching = query.isNotBlank()
+
+    // Back button: first undo the search / chip, then (at a clean Home) let MainScreen decide.
+    BackHandler {
+        if (query.isNotEmpty() || category != null) {
+            query = ""
+            category = null
+            focusManager.clearFocus()
+        } else {
+            onBackAtRoot()
+        }
+    }
 
     val showMeals = remember(query, category, meals) {
         meals.filter { meal ->
             (category == null || meal.category == category) &&
                     (query.isBlank() || meal.name.contains(query.trim(), true))
         }
+    }
+    val foodResults = remember(query, category) {
+        val q = query.trim()
+        FoodClass.entries.filter { food ->
+            (category == null || food.category == category) &&
+                    (food.displayName.contains(q, true) || food.label.contains(q, true))
+        }
+    }
+    // Drinks match by name. Only the "All" and "Drinks" chips show them.
+    val drinkResults = remember(query, category) {
+        val q = query.trim()
+        if (category != null && category != MealCategory.DRINKS) emptyList()
+        else Drinks.all.filter { it.name.contains(q, true) || it.id.replace('_', ' ').contains(q, true) }
     }
     val userName = remember {
         FirebaseAuth.getInstance().currentUser?.email
@@ -136,11 +174,13 @@ fun HomeScreen(
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
-                        placeholder = { Text("Search a meal, e.g. ugali") },
+                        placeholder = { Text("Search a food or drink") },
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Search") },
                         singleLine = true,
                         shape = RoundedCornerShape(20.dp),
                         colors = authFieldColors(),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(10.dp))
@@ -148,7 +188,10 @@ fun HomeScreen(
                 }
             }
 
-            item(span = FullWidth) { ScanHero(isScanning, onScanClick) }
+            // The scan card is hidden while the user is searching.
+            if (!searching) {
+                item(span = FullWidth) { ScanHero(isScanning, onScanClick) }
+            }
 
             // small menu chips: All / Carbs / Proteins / Veggies / ...
             item(span = FullWidth) {
@@ -160,27 +203,70 @@ fun HomeScreen(
                 }
             }
 
-            item(span = FullWidth) { DrinksRow(onDrinkClick) }
+            // The drinks row is hidden while the user is searching.
+            if (!searching) {
+                item(span = FullWidth) { DrinksRow(onDrinkClick) }
+            }
 
             item(span = FullWidth) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Recommended for you",
+                        if (searching) "Search results" else "Recommended for you",
                         modifier = Modifier.weight(1f),
                         fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold,
                         fontSize = 18.sp, color = TextDark
                     )
-                    Text("See all", fontSize = 12.sp, color = FoodOrange, fontWeight = FontWeight.SemiBold)
+                    if (!searching) {
+                        Text(
+                            "See all",
+                            fontSize = 12.sp, color = FoodOrange, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onSeeAll)
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
 
-            if (showMeals.isEmpty()) {
-                item(span = FullWidth) {
-                    Text("No meal found here yet. Try another name or category.", fontSize = 13.sp, color = Muted)
+            if (searching) {
+                // ---------- all 13 foods + drinks that match ----------
+                if (foodResults.isEmpty() && drinkResults.isEmpty()) {
+                    item(span = FullWidth) {
+                        Text("Nothing found. Try another name or category.", fontSize = 13.sp, color = Muted)
+                    }
                 }
-            }
-            items(showMeals, key = { it.id }) { meal ->
-                MealNutriCard(meal = meal, onClick = { onMealClick(meal) })
+                items(foodResults, key = { "food_${it.label}" }) { food ->
+                    val image = drawableByName(context, "food_${food.label}", R.drawable.meal_plate)
+                    MealPhotoCard(
+                        title = food.displayName,
+                        imageRes = image,
+                        modifier = Modifier.fillMaxWidth(),
+                        height = 150.dp,
+                        labelSize = 13.sp,
+                        onClick = { onMealClick(foodAsMeal(food, image)) }
+                    )
+                }
+                items(drinkResults, key = { "drink_${it.id}" }) { drink ->
+                    MealPhotoCard(
+                        title = drink.name,
+                        imageRes = drawableByName(context, drink.imageName, R.drawable.meal_plate),
+                        modifier = Modifier.fillMaxWidth(),
+                        height = 150.dp,
+                        labelSize = 13.sp,
+                        onClick = { onDrinkClick(drink) }
+                    )
+                }
+            } else {
+                // ---------- the usual preset meals ----------
+                if (showMeals.isEmpty()) {
+                    item(span = FullWidth) {
+                        Text("No meal found here yet. Try another name or category.", fontSize = 13.sp, color = Muted)
+                    }
+                }
+                items(showMeals, key = { "meal_${it.id}" }) { meal ->
+                    MealNutriCard(meal = meal, onClick = { onMealClick(meal) })
+                }
             }
         }
     }
@@ -208,8 +294,8 @@ private fun HomeHeader(userName: String) {
         }
         InfoMenuButton(
             infoTitle = "Home",
-            infoText = "Snap a photo of your plate or pick a meal below. Use the chips to filter by food type, " +
-                    "then answer a few quick questions and get your nutrition analysis."
+            infoText = "Snap a photo of your plate or pick a meal below. Search for any food or drink by name, " +
+                    "tap See all to browse every food, then choose your portions and get your nutrition analysis."
         )
     }
 }

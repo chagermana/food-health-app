@@ -75,6 +75,9 @@ import java.io.File
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.foodhealth.app.ui.screens.DrinkScreen
+import android.app.Activity
+import androidx.compose.runtime.mutableLongStateOf
+import com.foodhealth.app.ui.screens.AllFoodsScreen
 
 private const val TAG = "MainScreen"
 
@@ -105,6 +108,7 @@ fun MainScreen(onLogout: () -> Unit) {
     // ========================================================
 
     var isScanning by remember { mutableStateOf(false) }
+    var lastBackPress by remember { mutableLongStateOf(0L) }
     var showSourceDialog by remember { mutableStateOf(false) }
     var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -205,7 +209,27 @@ fun MainScreen(onLogout: () -> Unit) {
                             navController.navigate(Routes.SCAN_RESULT)
                         },
                         onScanClick = { showSourceDialog = true },
-                        onDrinkClick = { navController.navigate(Routes.drink(it.id)) }
+                        onDrinkClick = { navController.navigate(Routes.drink(it.id)) },
+                        onSeeAll = { navController.navigate(Routes.ALL_FOODS) },
+                        onBackAtRoot = {
+                            val now = System.currentTimeMillis()
+                            if (now - lastBackPress < 2000) {
+                                (context as? Activity)?.finish()
+                            } else {
+                                lastBackPress = now
+                                toast("Press back again to exit")
+                            }
+                        }
+                    )
+                }
+
+                composable(Routes.ALL_FOODS) {
+                    AllFoodsScreen(
+                        onBack = { navController.popBackStack() },
+                        onFoodClick = { meal ->
+                            flow.startManual(meal)
+                            navController.navigate(Routes.SCAN_RESULT)
+                        }
                     )
                 }
 

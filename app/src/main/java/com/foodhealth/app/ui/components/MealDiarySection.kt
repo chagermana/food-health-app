@@ -216,7 +216,7 @@ private fun DiaryRow(meal: StoredMeal) {
         if (meal.rating > 0) {
             Icon(Icons.Filled.Star, null, tint = FoodOrange, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(2.dp))
-            Text("${meal.rating}", fontSize = 12.sp, color = TextDark)
+            Text("${meal.rating}/10", fontSize = 12.sp, color = TextDark)
         }
     }
 }
