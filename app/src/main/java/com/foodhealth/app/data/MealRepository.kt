@@ -12,8 +12,10 @@ import com.google.firebase.firestore.SetOptions
 // =====================================================================
 // MealRepository.kt : the ONLY place that talks to Firestore about meals.
 //
-//   users/{uid}/meals/{mealId}           saved when the user taps "Proceed"
-//   users/{uid}/analyzed_meals/{mealId}  saved when the analysis is ready
+//   users/{uid}/meals/{mealId}           saved when the user taps "Proceed";
+//                                        updated with the nutrient totals and
+//                                        portion grams when the analysis is saved
+//   users/{uid}/analyzed_meals/{mealId}  full analysis (vitamins, minerals, advice)
 //
 // No photos are stored (free plan, no Firebase Storage).
 // All functions are "suspend": call them inside a coroutine.
@@ -27,8 +29,6 @@ class MealRepository(
         return db.collection(USERS).document(uid)
     }
 
-    // Saves the scanned meal. The mealId is made once per scan on the phone,
-    // so tapping "Proceed" twice overwrites the same document (no duplicates).
     suspend fun saveScannedMeal(
         mealId: String,
         source: ScanSource,
@@ -55,7 +55,6 @@ class MealRepository(
             "rating" to 0,
             "analyzed" to false
         )
-        // One batch = both writes succeed together or not at all.
         db.batch()
             .set(user, mapOf("email" to (auth.currentUser?.email ?: "")), SetOptions.merge())
             .set(user.collection(MEALS).document(mealId), meal)
@@ -63,8 +62,12 @@ class MealRepository(
             .awaitResult()
     }
 
-    // For the nutrient teammate: call this when the analysis is ready.
-    suspend fun saveAnalysis(mealId: String, analysis: MealAnalysis) {
+    // portionGrams = label -> grams the user picked, e.g. "ugali" to 200.
+    suspend fun saveAnalysis(
+        mealId: String,
+        analysis: MealAnalysis,
+        portionGrams: Map<String, Int> = emptyMap()
+    ) {
         val user = currentUserDoc()
         val data = hashMapOf<String, Any?>(
             "mealId" to mealId,
@@ -80,9 +83,21 @@ class MealRepository(
             "advice" to analysis.advice,
             "placeholderFoods" to analysis.placeholderFoods
         )
+        // The meal document also keeps the totals, so the Profile page can read
+        // a whole week with ONE query on "meals".
+        val mealFields = hashMapOf<String, Any?>(
+            "analyzed" to true,
+            "calories" to analysis.calories,
+            "proteinG" to analysis.proteinG,
+            "carbsG" to analysis.carbsG,
+            "fatG" to analysis.fatG,
+            "fibreG" to analysis.fibreG,
+            "balanceScore" to analysis.balanceScore,
+            "portions" to portionGrams
+        )
         db.batch()
             .set(user.collection(ANALYZED).document(mealId), data)
-            .update(user.collection(MEALS).document(mealId), "analyzed", true)
+            .update(user.collection(MEALS).document(mealId), mealFields)
             .commit()
             .awaitResult()
     }
@@ -113,6 +128,40 @@ class MealRepository(
                 source = doc.getString("source") ?: ""
             )
         }.sortedBy { it.createdAtMillis }
+    }
+
+    // Every meal between two dateKeys (inclusive) with its stored totals.
+    // Range on ONE field, so no Firestore index is needed.
+    suspend fun mealsBetween(startKey: String, endKey: String): List<MealRecord> {
+        val snapshot = currentUserDoc().collection(MEALS)
+            .whereGreaterThanOrEqualTo("dateKey", startKey)
+            .whereLessThanOrEqualTo("dateKey", endKey)
+            .get()
+            .awaitResult()
+
+        return snapshot.documents.map { doc ->
+            val labels = (doc.get("foods") as? List<*>)
+                ?.mapNotNull { (it as? Map<*, *>)?.get("label") as? String }
+                ?: emptyList()
+            val portions = (doc.get("portions") as? Map<*, *>)
+                ?.mapNotNull { (k, v) ->
+                    val key = k as? String
+                    val grams = (v as? Number)?.toDouble()
+                    if (key != null && grams != null) key to grams else null
+                }
+                ?.toMap()
+                ?: emptyMap()
+            MealRecord(
+                dateKey = doc.getString("dateKey") ?: "",
+                createdAtMillis = doc.getTimestamp("createdAt")?.toDate()?.time ?: 0L,
+                foodLabels = labels,
+                calories = doc.getDouble("calories") ?: 0.0,
+                proteinG = doc.getDouble("proteinG") ?: 0.0,
+                carbsG = doc.getDouble("carbsG") ?: 0.0,
+                fatG = doc.getDouble("fatG") ?: 0.0,
+                portionGrams = portions
+            )
+        }
     }
 
     private companion object {

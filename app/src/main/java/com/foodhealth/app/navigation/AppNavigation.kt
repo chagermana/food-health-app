@@ -21,6 +21,8 @@ object Routes {
     const val ANALYSIS = "tab_analysis"
     const val RATE = "tab_route"
     const val PROFILE = "tab_profile"
+    const val DRINK = "drink/{drinkId}"
+    fun drink(id: String) = "drink/$id"
     const val SCAN_RESULT = "scan_result"  // photo percentages + edit foods (replaced the old PORTION route)
     const val ERROR = "error"
 
